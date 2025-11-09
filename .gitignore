@@ -1,0 +1,41 @@
+# Certificate files (private keys should never be committed in production)
+certs/*.key
+vm-a-broker/certs/
+vm-b-leaf/certs/
+
+# In production, also ignore certificate files
+# For this POC, we're keeping them for demonstration
+# certs/
+
+# Kubernetes config
+.kube/
+*.kubeconfig
+kubeconfig
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor-specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Backup files
+*.bak
+*.backup
+
+# Test results
+test-results/
+coverage/

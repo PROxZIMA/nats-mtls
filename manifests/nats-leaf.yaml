@@ -1,0 +1,125 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-leaf-config
+  namespace: nats-system
+data:
+  nats.conf: |
+    # NATS Leaf Configuration
+    port: 4222
+    
+    # Monitoring
+    http_port: 8222
+    
+    # Logging
+    debug: false
+    trace: false
+    logtime: true
+    
+    # Authentication
+    authorization {
+      users = [
+        {
+          user: $NATS_USER
+          password: $NATS_PASS
+        }
+      ]
+    }
+    
+    # Leafnode Configuration (connecting to broker)
+    leafnodes {
+      remotes = [
+        {
+          url: "nats-leaf://$NATS_USER:$NATS_PASS@BROKER_IP_PLACEHOLDER:30722"
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats-leaf
+  namespace: nats-system
+  labels:
+    app: nats-leaf
+spec:
+  type: ClusterIP
+  ports:
+  - name: client
+    port: 4222
+    targetPort: 4222
+  - name: monitoring
+    port: 8222
+    targetPort: 8222
+  selector:
+    app: nats-leaf
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats-leaf
+  namespace: nats-system
+  labels:
+    app: nats-leaf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats-leaf
+  template:
+    metadata:
+      labels:
+        app: nats-leaf
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      containers:
+      - name: nats
+        image: nats:2.10-alpine
+        ports:
+        - containerPort: 4222
+          name: client
+        - containerPort: 8222
+          name: monitoring
+        env:
+        - name: NATS_USER
+          valueFrom:
+            secretKeyRef:
+              name: nats-auth
+              key: username
+        - name: NATS_PASS
+          valueFrom:
+            secretKeyRef:
+              name: nats-auth
+              key: password
+        command:
+        - "nats-server"
+        - "-c"
+        - "/etc/nats/nats.conf"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nats
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8222
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8222
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: config
+        configMap:
+          name: nats-leaf-config

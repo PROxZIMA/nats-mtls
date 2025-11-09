@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats-publisher
+  namespace: nats-system
+  labels:
+    app: nats-publisher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats-publisher
+  template:
+    metadata:
+      labels:
+        app: nats-publisher
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      containers:
+      - name: publisher
+        image: natsio/nats-box:latest
+        env:
+        - name: NATS_URL
+          value: "nats://nats-broker.nats-system.svc.cluster.local:4222"
+        - name: NATS_USER
+          valueFrom:
+            secretKeyRef:
+              name: nats-auth
+              key: username
+        - name: NATS_PASS
+          valueFrom:
+            secretKeyRef:
+              name: nats-auth
+              key: password
+        - name: SUBJECT
+          value: "test.messages"
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          echo "Starting NATS Publisher..."
+          echo "Connecting to: $NATS_URL"
+          echo "Subject: $SUBJECT"
+          echo ""
+          
+          # Wait a bit for NATS to be ready
+          sleep 5
+          
+          counter=0
+          while true; do
+            timestamp=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            message="Message #$counter - Published at $timestamp"
+            
+            nats pub "$SUBJECT" "$message" \
+              --server="$NATS_URL" \
+              --user="$NATS_USER" \
+              --password="$NATS_PASS"
+            
+            if [ $? -eq 0 ]; then
+              echo "[$(date -u +"%Y-%m-%d %H:%M:%S")] ✓ Published: $message"
+            else
+              echo "[$(date -u +"%Y-%m-%d %H:%M:%S")] ✗ Failed to publish message"
+            fi
+            
+            counter=$((counter + 1))
+            sleep 1
+          done
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
