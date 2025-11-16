@@ -101,6 +101,7 @@ spec:
         app: nats-broker
       annotations:
         linkerd.io/inject: enabled
+        config.linkerd.io/opaque-ports: "4222,7422"
     spec:
       containers:
       - name: nats

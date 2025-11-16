@@ -1,0 +1,40 @@
+---
+# Linkerd Server resource for NATS broker
+# This tells Linkerd to treat port 4222 and 7422 as opaque TCP (not HTTP)
+# while still providing mTLS encryption
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: nats-broker-client
+  namespace: nats-system
+spec:
+  podSelector:
+    matchLabels:
+      app: nats-broker
+  port: 4222
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: nats-broker-leafnode
+  namespace: nats-system
+spec:
+  podSelector:
+    matchLabels:
+      app: nats-broker
+  port: 7422
+  proxyProtocol: opaque
+---
+# Linkerd Server resource for NATS leaf
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: nats-leaf-client
+  namespace: nats-system
+spec:
+  podSelector:
+    matchLabels:
+      app: nats-leaf
+  port: 4222
+  proxyProtocol: opaque

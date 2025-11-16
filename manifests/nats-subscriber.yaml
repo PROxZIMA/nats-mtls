@@ -16,6 +16,7 @@ spec:
         app: nats-subscriber
       annotations:
         linkerd.io/inject: enabled
+        config.linkerd.io/skip-outbound-ports: "4222"
     spec:
       containers:
       - name: subscriber

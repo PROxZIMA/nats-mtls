@@ -18,6 +18,10 @@ kubectl create namespace nats-system --dry-run=client -o yaml | kubectl apply -f
 echo "Annotating namespace for Linkerd injection..."
 kubectl annotate namespace nats-system linkerd.io/inject=enabled --overwrite
 
+# Deploy Linkerd Server resources for NATS protocol configuration
+# echo "Deploying Linkerd Server resources..."
+# kubectl apply -f "$MANIFEST_DIR/linkerd-server-nats.yaml"
+
 # Create NATS authentication secret
 echo "Creating NATS authentication secret..."
 kubectl apply -f "$MANIFEST_DIR/nats-auth-secret.yaml"

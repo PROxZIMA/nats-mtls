@@ -74,6 +74,8 @@ spec:
         app: nats-leaf
       annotations:
         linkerd.io/inject: enabled
+        config.linkerd.io/skip-outbound-ports: "30722"
+        config.linkerd.io/opaque-ports: "4222"
     spec:
       containers:
       - name: nats
