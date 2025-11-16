@@ -18,26 +18,26 @@ data:
     logtime: true
     
     # Authentication
-    authorization {
-      users = [
-        {
-          user: $NATS_USER
-          password: $NATS_PASS
-        }
-      ]
-    }
+    # authorization {
+    #   users = [
+    #     {
+    #       user: $NATS_USER
+    #       password: $NATS_PASS
+    #     }
+    #   ]
+    # }
     
     # Leafnode Configuration (for accepting leaf connections)
     leafnodes {
       port: 7422
-      authorization {
-        users = [
-          {
-            user: $NATS_USER
-            password: $NATS_PASS
-          }
-        ]
-      }
+      # authorization {
+      #   users = [
+      #     {
+      #       user: $NATS_USER
+      #       password: $NATS_PASS
+      #     }
+      #   ]
+      # }
     }
 ---
 apiVersion: v1

@@ -18,20 +18,21 @@ data:
     logtime: true
     
     # Authentication
-    authorization {
-      users = [
-        {
-          user: $NATS_USER
-          password: $NATS_PASS
-        }
-      ]
-    }
+    # authorization {
+    #   users = [
+    #     {
+    #       user: $NATS_USER
+    #       password: $NATS_PASS
+    #     }
+    #   ]
+    # }
     
     # Leafnode Configuration (connecting to broker)
     leafnodes {
       remotes = [
         {
-          url: "nats-leaf://$NATS_USER:$NATS_PASS@BROKER_IP_PLACEHOLDER:30722"
+          # url: "nats-leaf://$NATS_USER:$NATS_PASS@129.154.247.85:30722"
+          url: "nats-leaf://129.154.247.85:30722"
         }
       ]
     }
