@@ -336,33 +336,6 @@ Total latency: ~30ms (with network latency between VMs)
 6. **Monitoring**: Add Prometheus + Grafana
 7. **Alerting**: Configure alerts for certificate expiry, pod health
 
-## Failure Scenarios
-
-### VM A Down
-- ❌ Publisher stops sending
-- ❌ Broker unavailable
-- ❌ Leaf connection breaks
-- ❌ Subscriber receives no new messages
-- **Recovery**: Leaf reconnects automatically when broker comes back
-
-### VM B Down
-- ✅ Publisher continues sending
-- ✅ Broker continues accepting messages
-- ❌ Subscriber unavailable
-- **Recovery**: Messages are lost unless JetStream is enabled
-
-### Network Partition
-- ❌ Leaf disconnects from broker
-- ✅ Local operations continue on both sides
-- ❌ No cross-cluster message flow
-- **Recovery**: Auto-reconnect when network restored
-
-### Certificate Expiry
-- ❌ mTLS validation fails
-- ❌ All encrypted communication stops
-- **Prevention**: Monitor certificate expiry, rotate before expiry
-- **Recovery**: Rotate certificates and restart pods
-
 ## Monitoring Points
 
 ### Health Checks
