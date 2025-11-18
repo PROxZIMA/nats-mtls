@@ -30,6 +30,10 @@ kubectl apply -f "$MANIFEST_DIR/nats-auth-secret.yaml"
 echo "Deploying NATS Broker..."
 kubectl apply -f "$MANIFEST_DIR/nats-broker.yaml"
 
+# Setup Ingress for NATS
+echo "Setting up Ingress for NATS..."
+bash "./setup-nats-ingress.sh"
+
 # Wait for deployment to be created
 echo "Waiting for deployment to be created..."
 sleep 5
@@ -58,5 +62,12 @@ echo "=========================================="
 echo "NATS Broker Deployment Complete!"
 echo "=========================================="
 echo ""
-echo "Broker endpoint: nats-broker.nats-system.svc.cluster.local:4222"
-echo "Leafnode endpoint: nats-broker.nats-system.svc.cluster.local:7422"
+echo "Internal endpoint (within cluster):"
+echo "  nats-broker.nats-system.svc.cluster.local:4222"
+echo ""
+echo "External access via Ingress (NodePort):"
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "<NODE-IP>")
+echo "  Client endpoint: $NODE_IP:30422"
+echo "  Leafnode endpoint: $NODE_IP:30722"
+echo ""
+echo "To get node IP: kubectl get nodes -o wide"

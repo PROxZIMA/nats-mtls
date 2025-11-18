@@ -61,27 +61,27 @@ spec:
     targetPort: 7422
   selector:
     app: nats-broker
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nats-broker-external
-  namespace: nats-system
-  labels:
-    app: nats-broker
-spec:
-  type: NodePort
-  ports:
-  - name: client
-    port: 4222
-    targetPort: 4222
-    nodePort: 30422
-  - name: leafnode
-    port: 7422
-    targetPort: 7422
-    nodePort: 30722
-  selector:
-    app: nats-broker
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: nats-broker-external
+#   namespace: nats-system
+#   labels:
+#     app: nats-broker
+# spec:
+#   type: NodePort
+#   ports:
+#   - name: client
+#     port: 4222
+#     targetPort: 4222
+#     nodePort: 30422
+#   - name: leafnode
+#     port: 7422
+#     targetPort: 7422
+#     nodePort: 30722
+#   selector:
+#     app: nats-broker
 ---
 apiVersion: apps/v1
 kind: Deployment
