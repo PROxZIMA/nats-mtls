@@ -1,6 +1,10 @@
-# NATS with Linkerd mTLS - Cross-Cluster Setup
+# NATS with Dual mTLS - Cross-Cluster Setup
 
-This project sets up a NATS broker-leaf architecture across two separate K3S clusters with Linkerd service mesh for mTLS communication.
+This project sets up a NATS broker-leaf architecture across two separate K3S clusters with **dual-layer mTLS**:
+1. **Native NATS mTLS** - Application-layer mutual TLS authentication with certificate-based client verification
+2. **Linkerd mTLS** - Service mesh layer encryption and authentication
+
+This provides defense-in-depth security with two independent layers of mutual authentication and encryption.
 
 ## Architecture Overview
 
@@ -54,18 +58,35 @@ NATS-mTLS/
 │   └── certs/                  # Certificates for VM B (to be created)
 │
 ├── shared/                     # Common scripts
-│   ├── install-prerequisites.sh # Install kubectl, helm, linkerd CLI, etc.
-│   ├── install-k3s.sh          # K3S installation
-│   └── generate-certificates.sh # Generate Linkerd certificates
+│   ├── install-prerequisites.sh       # Install kubectl, helm, linkerd CLI, etc.
+│   ├── install-k3s.sh                 # K3S installation
+│   ├── generate-certificates.sh       # Generate Linkerd certificates
+│   ├── generate-nats-certificates.sh  # Generate NATS mTLS certificates
+│   └── setup-nats-ingress.sh          # Setup ingress controller
 │
 ├── manifests/                  # Kubernetes manifests
-│   ├── nats-auth-secret.yaml   # NATS authentication credentials
-│   ├── nats-broker.yaml        # NATS broker deployment
-│   ├── nats-leaf.yaml          # NATS leaf deployment
-│   ├── nats-publisher.yaml     # Publisher client deployment
-│   └── nats-subscriber.yaml    # Subscriber client deployment
+│   ├── nats-auth-secret.yaml          # NATS authentication credentials
+│   ├── nats-broker.yaml               # NATS broker with mTLS
+│   ├── nats-leaf.yaml                 # NATS leaf with mTLS
+│   ├── nats-publisher.yaml            # Publisher with client certs
+│   ├── nats-subscriber.yaml           # Subscriber with client certs
+│   ├── nats-ingress.yaml              # HTTP monitoring ingress
+│   └── nginx-ingress-controller.yaml  # Ingress controller for TCP
 │
 ├── certs/                      # Generated certificates (local)
+│   ├── ca.crt, ca.key                 # Linkerd root CA
+│   ├── cluster-a-issuer.{crt,key}     # Linkerd cluster A issuer
+│   ├── cluster-b-issuer.{crt,key}     # Linkerd cluster B issuer
+│   └── nats/                          # NATS mTLS certificates
+│       ├── ca/                        # NATS root CA
+│       ├── broker/                    # Broker server certs
+│       ├── leaf/                      # Leaf server certs
+│       └── clients/                   # Client certificates
+│
+├── NATS-MTLS.md                # NATS mTLS architecture documentation
+├── NATS-MTLS-QUICKSTART.md     # Quick setup guide for NATS mTLS
+├── INGRESS.md                  # Ingress controller documentation
+├── ARCHITECTURE.md             # Detailed architecture
 └── README.md                   # This file
 ```
 
@@ -82,21 +103,32 @@ NATS-mTLS/
 
 ### Step 1: Generate Certificates (Run Locally)
 
-On your local machine (or any machine with `step-cli` installed), generate the Linkerd certificates:
+On your local machine (or any machine with `step-cli` installed), generate both Linkerd and NATS certificates:
 
 ```bash
 cd NATS-mTLS
 chmod +x shared/generate-certificates.sh
+chmod +x shared/generate-nats-certificates.sh
+
+# Generate Linkerd certificates
 ./shared/generate-certificates.sh
+
+# Generate NATS mTLS certificates
+./shared/generate-nats-certificates.sh
 ```
 
-This creates:
-- `certs/ca.crt` - Root CA certificate (shared)
-- `certs/ca.key` - Root CA key
-- `certs/cluster-a-issuer.crt` - Cluster A identity issuer certificate
-- `certs/cluster-a-issuer.key` - Cluster A identity issuer key
-- `certs/cluster-b-issuer.crt` - Cluster B identity issuer certificate
-- `certs/cluster-b-issuer.key` - Cluster B identity issuer key
+**Linkerd Certificates** (`certs/`):
+- `ca.crt, ca.key` - Root CA certificate (shared)
+- `cluster-a-issuer.{crt,key}` - Cluster A identity issuer
+- `cluster-b-issuer.{crt,key}` - Cluster B identity issuer
+
+**NATS mTLS Certificates** (`certs/nats/`):
+- `ca/ca.{crt,key}` - NATS root CA
+- `broker/server.{crt,key}` - Broker server certificate
+- `leaf/server.{crt,key}` - Leaf server certificate
+- `clients/publisher-client.{crt,key}` - Publisher client certificate
+- `clients/leaf-client.{crt,key}` - Leaf node client certificate (for broker connection)
+- `clients/subscriber-client.{crt,key}` - Subscriber client certificate
 
 ### Step 2: Copy Files to VM A & VM B
 
@@ -123,8 +155,10 @@ The setup script will:
 1. Install prerequisites (kubectl, helm, linkerd CLI, nats CLI, step-cli)
 2. Install K3S
 3. Install Linkerd with certificates
-4. Deploy NATS broker
-5. Deploy publisher client
+4. Create NATS mTLS certificate secrets
+5. Deploy NATS broker with mTLS enabled
+6. Deploy Nginx Ingress Controller for external access
+7. Deploy publisher client with mTLS certificates
 
 ### Step 4: Setup VM B (Leaf)
 
@@ -142,8 +176,9 @@ The setup script will:
 1. Install prerequisites
 2. Install K3S
 3. Install Linkerd with certificates (using same root CA)
-4. Deploy NATS leaf (connecting to broker)
-5. Deploy subscriber client
+4. Create NATS mTLS certificate secrets
+5. Deploy NATS leaf with mTLS enabled (connecting to broker)
+6. Deploy subscriber client with mTLS certificates
 
 ### Check NATS Connectivity
 
@@ -162,14 +197,29 @@ kubectl exec -n nats-system deployment/nats-leaf -- nats-server -sl connz
 ## Configuration Details
 
 ### NATS Ports
-- **Client Port**: 4222 (internal)
+- **Client Port**: 4222 (internal, TLS enabled)
 - **Monitoring Port**: 8222
-- **Leafnode Port**: 7422 (broker), exposed via NodePort 30722
+- **Leafnode Port**: 7422 (broker, TLS enabled)
+- **External Access**: 30422 (client), 30722 (leafnode) via Ingress Controller
 
 ### Message Subject
 - **Subject**: `test.messages`
-- **Frequency**: 1 message per second
+- **Frequency**: 1 message every 5 seconds
 - **Format**: "Message #N - Published at YYYY-MM-DD HH:MM:SS UTC"
+
+### Security Layers
+
+**1. Native NATS mTLS**
+- All NATS connections require mutual TLS authentication
+- Separate client certificates for publisher, leaf node, and subscriber
+- Certificate-based user mapping with `verify_and_map`
+
+**2. Linkerd mTLS**
+- Service mesh layer encryption between pods
+- Automatic certificate rotation
+- Zero-trust networking within each cluster
+
+This dual-layer approach provides defense-in-depth with independent authentication and encryption at both application and transport layers.
 
 ## Troubleshooting
 

@@ -11,7 +11,30 @@ echo "=========================================="
 export KUBECONFIG=~/.kube/config
 export PATH=$PATH:$HOME/.linkerd2/bin
 
+# Check if Linkerd is already installed
+echo "Checking for existing Linkerd installation..."
+if kubectl get namespace linkerd > /dev/null 2>&1; then
+    echo "Linkerd namespace found. Checking installation status..."
+    if linkerd check > /dev/null 2>&1; then
+        echo "Linkerd is already installed and healthy!"
+        echo "Skipping installation..."
+        echo ""
+        echo "=========================================="
+        echo "Linkerd Already Installed on Cluster A!"
+        echo "=========================================="
+        exit 0
+    else
+        echo "Linkerd installation found but not healthy. Reinstalling..."
+        echo "Removing existing Linkerd installation..."
+        linkerd uninstall | kubectl delete -f - || true
+        kubectl delete namespace linkerd --timeout=60s || true
+    fi
+else
+    echo "No existing Linkerd installation found."
+fi
+
 # Check Linkerd pre-requisites
+echo ""
 echo "Checking Linkerd pre-requisites..."
 linkerd check --pre
 

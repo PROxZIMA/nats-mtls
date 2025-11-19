@@ -17,27 +17,29 @@ data:
     trace: false
     logtime: true
     
-    # Authentication
-    # authorization {
-    #   users = [
-    #     {
-    #       user: $NATS_USER
-    #       password: $NATS_PASS
-    #     }
-    #   ]
-    # }
+    # TLS Configuration for Client Connections
+    tls {
+      cert_file: "/etc/nats/certs/server/tls.crt"
+      key_file: "/etc/nats/certs/server/tls.key"
+      ca_file: "/etc/nats/certs/ca/ca.crt"
+      verify: true
+      verify_and_map: true
+      timeout: 5
+    }
     
     # Leafnode Configuration (for accepting leaf connections)
     leafnodes {
       port: 7422
-      # authorization {
-      #   users = [
-      #     {
-      #       user: $NATS_USER
-      #       password: $NATS_PASS
-      #     }
-      #   ]
-      # }
+      
+      # TLS Configuration for Leafnode Connections
+      tls {
+        cert_file: "/etc/nats/certs/server/tls.crt"
+        key_file: "/etc/nats/certs/server/tls.key"
+        ca_file: "/etc/nats/certs/ca/ca.crt"
+        verify: true
+        verify_and_map: true
+        timeout: 5
+      }
     }
 ---
 apiVersion: v1
@@ -131,6 +133,12 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/nats
+        - name: server-tls
+          mountPath: /etc/nats/certs/server
+          readOnly: true
+        - name: ca-cert
+          mountPath: /etc/nats/certs/ca
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz
@@ -154,3 +162,9 @@ spec:
       - name: config
         configMap:
           name: nats-broker-config
+      - name: server-tls
+        secret:
+          secretName: nats-broker-server-tls
+      - name: ca-cert
+        secret:
+          secretName: nats-ca

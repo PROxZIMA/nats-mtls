@@ -31,6 +31,10 @@ kubectl annotate namespace nats-system linkerd.io/inject=enabled --overwrite
 echo "Creating NATS authentication secret..."
 kubectl apply -f "$MANIFEST_DIR/nats-auth-secret.yaml"
 
+# Create NATS TLS certificates secrets
+echo "Creating NATS mTLS certificate secrets..."
+bash "$SCRIPT_DIR/create-nats-secrets.sh"
+
 # Create ConfigMap with broker IP
 echo "Creating NATS leaf configuration..."
 cat <<EOF | kubectl apply -f -

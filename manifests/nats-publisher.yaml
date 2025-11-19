@@ -23,26 +23,24 @@ spec:
         image: natsio/nats-box:latest
         env:
         - name: NATS_URL
-          value: "nats://nats-broker.nats-system.svc.cluster.local:4222"
-        - name: NATS_USER
-          valueFrom:
-            secretKeyRef:
-              name: nats-auth
-              key: username
-        - name: NATS_PASS
-          valueFrom:
-            secretKeyRef:
-              name: nats-auth
-              key: password
+          value: "tls://nats-broker.nats-system.svc.cluster.local:4222"
         - name: SUBJECT
           value: "test.messages"
+        - name: NATS_CERT
+          value: "/etc/nats/certs/client/tls.crt"
+        - name: NATS_KEY
+          value: "/etc/nats/certs/client/tls.key"
+        - name: NATS_CA
+          value: "/etc/nats/certs/ca/ca.crt"
         command:
         - "/bin/sh"
         - "-c"
         - |
-          echo "Starting NATS Publisher..."
+          echo "Starting NATS Publisher with mTLS..."
           echo "Connecting to: $NATS_URL"
           echo "Subject: $SUBJECT"
+          echo "Client Cert: $NATS_CERT"
+          echo "CA Cert: $NATS_CA"
           echo ""
           
           # Wait a bit for NATS to be ready
@@ -54,9 +52,10 @@ spec:
             message="Message #$counter - Published at $timestamp"
             
             nats pub "$SUBJECT" "$message" \
-              --server="$NATS_URL"
-              # --user="$NATS_USER" \
-              # --password="$NATS_PASS"
+              --server="$NATS_URL" \
+              --tlscert="$NATS_CERT" \
+              --tlskey="$NATS_KEY" \
+              --tlsca="$NATS_CA"
             
             if [ $? -eq 0 ]; then
               echo "[$(date -u +"%Y-%m-%d %H:%M:%S")] ✓ Published: $message"
@@ -67,6 +66,13 @@ spec:
             counter=$((counter + 1))
             sleep 5
           done
+        volumeMounts:
+        - name: client-tls
+          mountPath: /etc/nats/certs/client
+          readOnly: true
+        - name: ca-cert
+          mountPath: /etc/nats/certs/ca
+          readOnly: true
         resources:
           requests:
             cpu: 50m
@@ -74,3 +80,10 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+      volumes:
+      - name: client-tls
+        secret:
+          secretName: nats-publisher-client-tls
+      - name: ca-cert
+        secret:
+          secretName: nats-ca

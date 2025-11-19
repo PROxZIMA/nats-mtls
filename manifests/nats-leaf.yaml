@@ -17,22 +17,30 @@ data:
     trace: false
     logtime: true
     
-    # Authentication
-    # authorization {
-    #   users = [
-    #     {
-    #       user: $NATS_USER
-    #       password: $NATS_PASS
-    #     }
-    #   ]
-    # }
+    # TLS Configuration for Client Connections
+    tls {
+      cert_file: "/etc/nats/certs/server/tls.crt"
+      key_file: "/etc/nats/certs/server/tls.key"
+      ca_file: "/etc/nats/certs/ca/ca.crt"
+      verify: true
+      verify_and_map: true
+      timeout: 5
+    }
     
-    # Leafnode Configuration (connecting to broker)
+    # Leafnode Configuration (connecting to broker with mTLS)
     leafnodes {
       remotes = [
         {
-          # url: "nats-leaf://$NATS_USER:$NATS_PASS@129.154.247.85:30722"
-          url: "nats-leaf://129.154.247.85:30722"
+          # Update this URL with the actual broker node IP
+          url: "tls://129.154.247.85:30722"
+          
+          # TLS Configuration for connecting to broker
+          tls {
+            cert_file: "/etc/nats/certs/leaf-client/tls.crt"
+            key_file: "/etc/nats/certs/leaf-client/tls.key"
+            ca_file: "/etc/nats/certs/ca/ca.crt"
+            timeout: 5
+          }
         }
       ]
     }
@@ -103,6 +111,15 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/nats
+        - name: server-tls
+          mountPath: /etc/nats/certs/server
+          readOnly: true
+        - name: leaf-client-tls
+          mountPath: /etc/nats/certs/leaf-client
+          readOnly: true
+        - name: ca-cert
+          mountPath: /etc/nats/certs/ca
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz
@@ -126,3 +143,12 @@ spec:
       - name: config
         configMap:
           name: nats-leaf-config
+      - name: server-tls
+        secret:
+          secretName: nats-leaf-server-tls
+      - name: leaf-client-tls
+        secret:
+          secretName: nats-leaf-client-tls
+      - name: ca-cert
+        secret:
+          secretName: nats-ca

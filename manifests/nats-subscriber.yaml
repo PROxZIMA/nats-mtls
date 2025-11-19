@@ -23,26 +23,24 @@ spec:
         image: natsio/nats-box:latest
         env:
         - name: NATS_URL
-          value: "nats://nats-leaf.nats-system.svc.cluster.local:4222"
-        - name: NATS_USER
-          valueFrom:
-            secretKeyRef:
-              name: nats-auth
-              key: username
-        - name: NATS_PASS
-          valueFrom:
-            secretKeyRef:
-              name: nats-auth
-              key: password
+          value: "tls://nats-leaf.nats-system.svc.cluster.local:4222"
         - name: SUBJECT
           value: "test.messages"
+        - name: NATS_CERT
+          value: "/etc/nats/certs/client/tls.crt"
+        - name: NATS_KEY
+          value: "/etc/nats/certs/client/tls.key"
+        - name: NATS_CA
+          value: "/etc/nats/certs/ca/ca.crt"
         command:
         - "/bin/sh"
         - "-c"
         - |
-          echo "Starting NATS Subscriber..."
+          echo "Starting NATS Subscriber with mTLS..."
           echo "Connecting to: $NATS_URL"
           echo "Subject: $SUBJECT"
+          echo "Client Cert: $NATS_CERT"
+          echo "CA Cert: $NATS_CA"
           echo ""
           
           # Wait a bit for NATS leaf to be ready
@@ -55,8 +53,9 @@ spec:
           while true; do
             nats sub "$SUBJECT" \
               --server="$NATS_URL" \
-              # --user="$NATS_USER" \
-              # --password="$NATS_PASS" \
+              --tlscert="$NATS_CERT" \
+              --tlskey="$NATS_KEY" \
+              --tlsca="$NATS_CA" \
               2>&1 | while IFS= read -r line; do
                 timestamp=$(date -u +"%Y-%m-%d %H:%M:%S")
                 # Filter out subscription confirmation messages
@@ -71,6 +70,13 @@ spec:
             echo "[$(date -u +"%Y-%m-%d %H:%M:%S")] ⚠ Subscription ended, reconnecting..."
             sleep 5
           done
+        volumeMounts:
+        - name: client-tls
+          mountPath: /etc/nats/certs/client
+          readOnly: true
+        - name: ca-cert
+          mountPath: /etc/nats/certs/ca
+          readOnly: true
         resources:
           requests:
             cpu: 50m
@@ -78,3 +84,10 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+      volumes:
+      - name: client-tls
+        secret:
+          secretName: nats-subscriber-client-tls
+      - name: ca-cert
+        secret:
+          secretName: nats-ca

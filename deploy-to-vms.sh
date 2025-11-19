@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # This script helps deploy the project to both VMs from your local machine
-# Usage: ./deploy-to-vms.sh
+# Usage: VM_A_IP=129.154.247.85 VM_A_SSH_KEY=~/.ssh/a_ssh.key VM_B_IP=144.24.103.105 VM_B_SSH_KEY=~/.ssh/b_ssh.key ./deploy-to-vms.sh
 
 VM_A_IP="${VM_A_IP:-1.1.1.1}"
 VM_A_SSH_KEY="${VM_A_SSH_KEY:-~/.ssh/a_ssh.key}"
@@ -46,14 +46,20 @@ scp -i "$VM_A_SSH_KEY" -r manifests "$SSH_USER@$VM_A_IP:$WORKING_DIR/" || { echo
 
 echo "Creating certs directory on VM A..."
 ssh -i "$VM_A_SSH_KEY" "$SSH_USER@$VM_A_IP" "mkdir -p $WORKING_DIR/certs" || { echo "Failed to create certs dir"; exit 1; }
+ssh -i "$VM_A_SSH_KEY" "$SSH_USER@$VM_A_IP" "mkdir -p $WORKING_DIR/certs/nats" || { echo "Failed to create nats certs dir"; exit 1; }
 
 echo "Copying certificates to VM A..."
 scp -i "$VM_A_SSH_KEY" certs/ca.crt "$SSH_USER@$VM_A_IP:$WORKING_DIR/certs/" || { echo "Failed to copy ca.crt"; exit 1; }
 scp -i "$VM_A_SSH_KEY" certs/cluster-a-issuer.crt "$SSH_USER@$VM_A_IP:$WORKING_DIR/certs/" || { echo "Failed to copy cluster-a-issuer.crt"; exit 1; }
 scp -i "$VM_A_SSH_KEY" certs/cluster-a-issuer.key "$SSH_USER@$VM_A_IP:$WORKING_DIR/certs/" || { echo "Failed to copy cluster-a-issuer.key"; exit 1; }
 
+echo "Copying nats certificates to VM A..."
+scp -i "$VM_A_SSH_KEY" -r certs/nats/* "$SSH_USER@$VM_A_IP:$WORKING_DIR/certs/nats/" || { echo "Failed to copy nats certificates"; exit 1; }
+
+
 echo "Setting permissions on VM A..."
 ssh -i "$VM_A_SSH_KEY" "$SSH_USER@$VM_A_IP" "chmod +x $WORKING_DIR/**/*.sh" || { echo "Failed to set permissions"; exit 1; }
+ssh -i "$VM_A_SSH_KEY" "$SSH_USER@$VM_A_IP" "find $WORKING_DIR -name '*.sh' -type f -exec sed -i 's/\r$//' {} +" || { echo "Failed to convert line endings on VM A"; exit 1; }
 
 echo "VM A deployment complete ✓"
 echo ""
@@ -73,14 +79,19 @@ scp -i "$VM_B_SSH_KEY" -r manifests "$SSH_USER@$VM_B_IP:$WORKING_DIR/" || { echo
 
 echo "Creating certs directory on VM B..."
 ssh -i "$VM_B_SSH_KEY" "$SSH_USER@$VM_B_IP" "mkdir -p $WORKING_DIR/certs" || { echo "Failed to create certs dir"; exit 1; }
+ssh -i "$VM_B_SSH_KEY" "$SSH_USER@$VM_B_IP" "mkdir -p $WORKING_DIR/certs/nats" || { echo "Failed to create nats certs dir"; exit 1; }
 
 echo "Copying certificates to VM B..."
 scp -i "$VM_B_SSH_KEY" certs/ca.crt "$SSH_USER@$VM_B_IP:$WORKING_DIR/certs/" || { echo "Failed to copy ca.crt"; exit 1; }
 scp -i "$VM_B_SSH_KEY" certs/cluster-b-issuer.crt "$SSH_USER@$VM_B_IP:$WORKING_DIR/certs/" || { echo "Failed to copy cluster-b-issuer.crt"; exit 1; }
 scp -i "$VM_B_SSH_KEY" certs/cluster-b-issuer.key "$SSH_USER@$VM_B_IP:$WORKING_DIR/certs/" || { echo "Failed to copy cluster-b-issuer.key"; exit 1; }
 
+echo "Copying nats certificates to VM B..."
+scp -i "$VM_B_SSH_KEY" -r certs/nats/* "$SSH_USER@$VM_B_IP:$WORKING_DIR/certs/nats/" || { echo "Failed to copy nats certificates"; exit 1; }
+
 echo "Setting permissions on VM B..."
 ssh -i "$VM_B_SSH_KEY" "$SSH_USER@$VM_B_IP" "chmod +x $WORKING_DIR/**/*.sh" || { echo "Failed to set permissions"; exit 1; }
+ssh -i "$VM_B_SSH_KEY" "$SSH_USER@$VM_B_IP" "find $WORKING_DIR -name '*.sh' -type f -exec sed -i 's/\r$//' {} +" || { echo "Failed to convert line endings on VM B"; exit 1; }
 
 echo "VM B deployment complete ✓"
 echo ""
