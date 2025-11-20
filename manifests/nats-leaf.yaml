@@ -27,12 +27,13 @@ data:
       timeout: 5
     }
     
-    # Leafnode Configuration (connecting to broker with mTLS)
+    # Leafnode Configuration (connecting to broker with mTLS via Linkerd multicluster)
     leafnodes {
       remotes = [
         {
-          # Update this URL with the actual broker node IP
-          url: "tls://129.154.247.85:30722"
+          # Using Linkerd multicluster mirrored service
+          # The service will be mirrored as: nats-broker-cluster-a.nats-system.svc.cluster.local
+          url: "tls://nats-broker-cluster-a.nats-system.svc.cluster.local:7422"
           
           # TLS Configuration for connecting to broker
           tls {
@@ -82,8 +83,7 @@ spec:
         app: nats-leaf
       annotations:
         linkerd.io/inject: enabled
-        config.linkerd.io/skip-outbound-ports: "30722"
-        config.linkerd.io/opaque-ports: "4222"
+        config.linkerd.io/opaque-ports: "4222,7422"
     spec:
       containers:
       - name: nats
