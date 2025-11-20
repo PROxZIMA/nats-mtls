@@ -49,6 +49,7 @@ metadata:
   namespace: nats-system
   labels:
     app: nats-broker
+    mirror.linkerd.io/exported: "true"
 spec:
   type: ClusterIP
   ports:

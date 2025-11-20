@@ -22,9 +22,14 @@ This provides defense-in-depth security with two independent layers of mutual au
 │  │  └────────────────────────┘  │  │         │  │  └────────────────────────┘  │  │
 │  │                              │  │         │  │                              │  │
 │  │  ┌────────────────────────┐  │  │         │  │  ┌────────────────────────┐  │  │
+│  │  │ Linkerd Gateway        │  │  │         │  │  │ Mirrored Service:      │  │  │
+│  │  │ Port: 4143 (30143)     │◄─┼──┼─────────┼──┼─►│ nats-broker-cluster-a  │  │  │
+│  │  └────────────────────────┘  │  │  Link   │  │  └──────────┬─────────────┘  │  │
+│  │                              │  │         │  │             │                │  │
+│  │  ┌────────────────────────┐  │  │         │  │  ┌──────────▼─────────────┐  │  │
 │  │  │   NATS Broker          │  │  │         │  │  │   NATS Leaf            │  │  │
-│  │  │   Port: 4222           │◄─┼──┼─────────┼──┼─►│   Port: 4222           │  │  │
-│  │  │   Leafnode: 7422       │  │  │  mTLS   │  │  │   Remote: 1.1.1.1:30722│  │  │
+│  │  │   (Exported Service)   │  │  │         │  │  │   Connects via DNS     │  │  │
+│  │  │   Port: 4222, 7422     │  │  │         │  │  │   Port: 4222           │  │  │
 │  │  │   (Linkerd Injected)   │  │  │         │  │  │   (Linkerd Injected)   │  │  │
 │  │  └────────────────────────┘  │  │         │  │  └────────────────────────┘  │  │
 │  │              ▲               │  │         │  │              ▲               │  │
@@ -46,6 +51,8 @@ NATS-mTLS/
 ├── vm-a-broker/                # VM A (Broker) setup scripts
 │   ├── setup.sh                # Main setup script for VM A
 │   ├── install-linkerd.sh      # Linkerd installation
+│   ├── setup-multicluster.sh   # Linkerd multicluster setup
+│   ├── create-nats-secrets.sh  # Create NATS mTLS secrets
 │   ├── deploy-nats-broker.sh   # NATS broker deployment
 │   ├── deploy-publisher.sh     # Publisher client deployment
 │   └── certs/                  # Certificates for VM A (to be created)
@@ -53,6 +60,8 @@ NATS-mTLS/
 ├── vm-b-leaf/                  # VM B (Leaf) setup scripts
 │   ├── setup.sh                # Main setup script for VM B
 │   ├── install-linkerd.sh      # Linkerd installation
+│   ├── setup-multicluster.sh   # Linkerd multicluster setup & link
+│   ├── create-nats-secrets.sh  # Create NATS mTLS secrets
 │   ├── deploy-nats-leaf.sh     # NATS leaf deployment
 │   ├── deploy-subscriber.sh    # Subscriber client deployment
 │   └── certs/                  # Certificates for VM B (to be created)
@@ -93,11 +102,26 @@ NATS-mTLS/
 ## Prerequisites
 
 - Two Ubuntu Linux VMs (fresh installation)
-- VM A IP: `1.1.1.1` with `30722/tcp` ingress rule
-- VM B IP: `2.2.2.2`
-- VMs can communicate directly with each other
+- **VM A (Broker):**
+  - Internal/Private IP: `10.0.0.37` (or similar)
+  - External/Public IP: `129.154.247.85`
+  - Firewall rules allowing inbound from VM B to:
+    - `6443/tcp` (Kubernetes API server - on external IP)
+    - `4143` Gateway port (automatically assigned LoadBalancer or use NodePort)
+    - `4191` Probe port
+- **VM B (Leaf):**
+  - Must be able to reach VM A's external IP
 - User: ubuntu (with sudo privileges)
 - Internet connectivity on both VMs
+
+**Network Connectivity Requirements:**
+- VM B → VM A external IP:6443 (Kubernetes API access)
+- VM B → VM A gateway port (Linkerd multicluster traffic)
+
+**Key Configuration:**
+- K3s is installed with `--node-external-ip` to expose API server on external IP
+- Linkerd multicluster uses default gateway configuration (LoadBalancer)
+- Link file is generated using `linkerd multicluster link-gen` (no manual IP specification needed)
 
 ## Installation Steps
 
@@ -147,9 +171,21 @@ SSH into VM A and run the setup:
 ssh ubuntu@1.1.1.1
 
 cd /home/ubuntu/vm-a-broker
+
+# Set the node IP addresses (required for multicluster)
+export NODE_EXTERNAL_IP=129.154.247.85  # VM A's public IP
+export NODE_INTERNAL_IP=10.0.0.37       # VM A's private IP (optional)
+
 # Run the setup (this will take 10-15 minutes)
 ./setup.sh
 ```
+
+**Important:** The setup will:
+- Install K3s with `--node-external-ip` and `--tls-san` flags
+- Create two kubeconfig files:
+  - `~/.kube/config` - Uses 127.0.0.1 (local access)
+  - `~/.kube/config-external` - Uses external IP (for multicluster)
+- Configure Linkerd multicluster to use the external IP automatically
 
 The setup script will:
 1. Install prerequisites (kubectl, helm, linkerd CLI, nats CLI, step-cli)
@@ -157,8 +193,11 @@ The setup script will:
 3. Install Linkerd with certificates
 4. Create NATS mTLS certificate secrets
 5. Deploy NATS broker with mTLS enabled
-6. Deploy Nginx Ingress Controller for external access
-7. Deploy publisher client with mTLS certificates
+6. Setup Linkerd multicluster with gateway (port 4143/30143)
+7. Export NATS broker service for cross-cluster discovery
+8. Generate cluster link credentials (cluster-a-link.yaml)
+9. Deploy Nginx Ingress Controller for external access
+10. Deploy publisher client with mTLS certificates
 
 ### Step 4: Setup VM B (Leaf)
 
@@ -177,10 +216,35 @@ The setup script will:
 2. Install K3S
 3. Install Linkerd with certificates (using same root CA)
 4. Create NATS mTLS certificate secrets
-5. Deploy NATS leaf with mTLS enabled (connecting to broker)
-6. Deploy subscriber client with mTLS certificates
+5. Setup Linkerd multicluster and establish link to cluster-a
+6. Wait for mirrored service (nats-broker-cluster-a) to appear
+7. Deploy NATS leaf with mTLS enabled (connecting to mirrored broker)
+8. Deploy subscriber client with mTLS certificates
 
-### Check NATS Connectivity
+### Step 5: Verify Linkerd Multicluster Setup
+
+On VM A (Broker):
+```bash
+# Check gateway status
+linkerd multicluster gateways
+
+# Verify NATS broker is exported
+kubectl get svc -n nats-system -l mirror.linkerd.io/exported=true
+```
+
+On VM B (Leaf):
+```bash
+# Check cluster link status
+linkerd multicluster check
+
+# Verify mirrored service exists
+kubectl get svc -n nats-system nats-broker-cluster-a
+
+# View service details
+kubectl describe svc -n nats-system nats-broker-cluster-a
+```
+
+### Step 6: Check NATS Connectivity
 
 On VM A:
 ```bash
@@ -201,6 +265,17 @@ kubectl exec -n nats-system deployment/nats-leaf -- nats-server -sl connz
 - **Monitoring Port**: 8222
 - **Leafnode Port**: 7422 (broker, TLS enabled)
 - **External Access**: 30422 (client), 30722 (leafnode) via Ingress Controller
+
+### Linkerd Multicluster Ports
+- **Gateway Port**: 4143 (internal)
+- **Gateway NodePort**: 30143 (external, for cross-cluster communication)
+- **Required Firewall Rule**: Allow TCP port 30143 on VM A for VM B access
+
+### Service Discovery
+- **Leaf Connection Method**: DNS-based via mirrored service
+- **Mirrored Service Name**: `nats-broker-cluster-a.nats-system.svc.cluster.local`
+- **Original Service**: `nats-broker.nats-system.svc.cluster.local` (on VM A)
+- **Benefit**: No hardcoded IP addresses, automatic service discovery
 
 ### Message Subject
 - **Subject**: `test.messages`
@@ -223,25 +298,60 @@ This dual-layer approach provides defense-in-depth with independent authenticati
 
 ## Troubleshooting
 
+### Mirrored Service Not Appearing
+
+1. Check Linkerd gateway on VM A:
+```bash
+# On VM A
+linkerd multicluster gateways
+kubectl get svc -n linkerd-multicluster linkerd-gateway
+```
+
+2. Verify service is exported:
+```bash
+# On VM A
+kubectl get svc -n nats-system nats-broker -o jsonpath='{.metadata.labels.mirror\.linkerd\.io/exported}'
+```
+
+3. Check cluster link on VM B:
+```bash
+# On VM B
+linkerd multicluster check
+kubectl get links -n linkerd-multicluster
+```
+
+4. Verify network connectivity to gateway:
+```bash
+# On VM B
+nc -zv <VM-A-IP> 4143
+```
+
 ### Subscriber not receiving messages
 
-1. Check NATS leaf connection:
+1. Check mirrored service exists:
+```bash
+# On VM B
+kubectl get svc -n nats-system nats-broker-cluster-a
+```
+
+2. Check NATS leaf connection:
 ```bash
 # On VM B
 kubectl logs -n nats-system -l app=nats-leaf
 ```
 
-2. Check connectivity from VM B to VM A:
+3. Check connectivity from VM B to VM A gateway:
 ```bash
 # On VM B
-nc -zv 1.1.1.1 30722
+nc -zv <VM-A-IP> 4143
 ```
 
-3. Check firewall rules on VM A:
+4. Check firewall rules on VM A:
 ```bash
 # On VM A
 sudo ufw status
-sudo ufw allow 30722/tcp  # If needed
+sudo ufw allow 30143/tcp  # Linkerd gateway
+sudo ufw allow 30722/tcp  # NATS leafnode (legacy, if still using direct connection)
 ```
 
 ### Linkerd mTLS not working
@@ -281,8 +391,10 @@ rm -rfd /home/ubuntu/nats
 
 - [NATS Documentation](https://docs.nats.io/)
 - [Linkerd Documentation](https://linkerd.io/docs/)
+- [Linkerd Multicluster](https://linkerd.io/2/features/multicluster/)
 - [K3S Documentation](https://docs.k3s.io/)
 - [NATS Leafnodes](https://docs.nats.io/running-a-nats-service/configuration/leafnodes)
+- [NATS TLS Configuration](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/tls)
 
 ## License
 

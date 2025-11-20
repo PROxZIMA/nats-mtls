@@ -3,14 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CERT_DIR="$SCRIPT_DIR/../certs"
-
-# VM A IP address (NATS Broker)
-BROKER_IP="${BROKER_IP:-1.1.1.1}"
+LINK_FILE="$SCRIPT_DIR/cluster-a-link.yaml"
 
 echo "=========================================="
 echo "VM B - NATS Leaf Cluster Setup"
 echo "=========================================="
-echo "Broker IP: $BROKER_IP"
+echo "Using Linkerd Multicluster for service discovery"
 echo ""
 
 # Check if running as ubuntu user
@@ -55,12 +53,40 @@ bash "$SCRIPT_DIR/install-linkerd.sh"
 # Step 5: Deploy NATS Leaf
 echo ""
 echo "Step 5: Deploying NATS Leaf..."
-BROKER_IP="$BROKER_IP" bash "$SCRIPT_DIR/deploy-nats-leaf.sh"
+bash "$SCRIPT_DIR/deploy-nats-leaf.sh"
 
 # Step 6: Deploy Subscriber Client
 echo ""
 echo "Step 6: Deploying Subscriber Client..."
 bash "$SCRIPT_DIR/deploy-subscriber.sh"
+
+# Step 7: Setup Linkerd Multicluster
+echo ""
+echo "Step 7: Setting up Linkerd Multicluster..."
+if [ ! -f "$LINK_FILE" ]; then
+    echo "WARNING: cluster-a-link.yaml not found at $LINK_FILE"
+    echo "Please copy it from VM A and run:"
+    echo "  ./setup-multicluster.sh cluster-a-link.yaml"
+    echo ""
+    echo "Continuing without multicluster setup..."
+else
+    bash "$SCRIPT_DIR/setup-multicluster.sh" "$LINK_FILE"
+fi
+
+# Step 8: Wait for mirrored service
+if [ -f "$LINK_FILE" ]; then
+    echo ""
+    echo "Step 8: Waiting for mirrored service..."
+    echo "Waiting for nats-broker-cluster-a service to be created..."
+    for i in {1..30}; do
+        if kubectl get svc nats-broker-cluster-a -n nats-system &>/dev/null; then
+            echo "✓ Mirrored service found!"
+            break
+        fi
+        echo "  Waiting... ($i/30)"
+        sleep 2
+    done
+fi
 
 echo ""
 echo "=========================================="
@@ -76,5 +102,14 @@ echo ""
 echo "Subscriber Status:"
 kubectl get pods -n nats-system -l app=nats-subscriber
 echo ""
+echo "Mirrored Services:"
+kubectl get svc -n nats-system | grep cluster-a || echo "No mirrored services found"
+echo ""
+echo "Linkerd Gateway Connection:"
+linkerd multicluster gateways 2>/dev/null || echo "Multicluster not configured"
+echo ""
 echo "To check subscriber logs:"
 echo "  kubectl logs -n nats-system -l app=nats-subscriber -f"
+echo ""
+echo "To check leaf connection:"
+echo "  kubectl logs -n nats-system deployment/nats-leaf | grep -i leafnode"

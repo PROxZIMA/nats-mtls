@@ -37,6 +37,8 @@ echo "2. Uninstalling Linkerd..."
 if command -v linkerd &> /dev/null; then
     if kubectl get namespace linkerd &> /dev/null; then
         linkerd viz uninstall | kubectl delete -f - || true
+        linkerd multicluster unlink --cluster-name=cluster-a | kubectl delete -f - || true
+        linkerd multicluster uninstall | kubectl delete -f - || true
         linkerd uninstall | kubectl delete -f - || true
         echo "   ✓ Linkerd uninstalled"
     else
