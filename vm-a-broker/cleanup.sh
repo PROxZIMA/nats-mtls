@@ -22,7 +22,7 @@ echo ""
 echo "Starting cleanup..."
 echo ""
 
-# Step 1: Delete NATS resources
+# Step 1: Delete NATS resources 
 echo "1. Deleting NATS resources..."
 if kubectl get namespace nats-system &> /dev/null; then
     kubectl delete namespace nats-system --timeout=60s || true
@@ -37,6 +37,7 @@ echo "2. Uninstalling Linkerd..."
 if command -v linkerd &> /dev/null; then
     if kubectl get namespace linkerd &> /dev/null; then
         linkerd viz uninstall | kubectl delete -f - || true
+        linkerd multicluster uninstall | kubectl delete -f - || true
         linkerd uninstall | kubectl delete -f - || true
         echo "   ✓ Linkerd uninstalled"
     else
@@ -66,6 +67,7 @@ fi
 echo ""
 echo "5. Removing configuration files..."
 rm -rf ~/.kube/config
+rm -rf ~/.kube/config-external
 rm -rf ~/.kube-config
 echo "   ✓ Kubernetes config removed"
 
