@@ -18,14 +18,14 @@ data:
     logtime: true
     
     # TLS Configuration for Client Connections
-    tls {
-      cert_file: "/etc/nats/certs/server/tls.crt"
-      key_file: "/etc/nats/certs/server/tls.key"
-      ca_file: "/etc/nats/certs/ca/ca.crt"
-      verify: true
-      verify_and_map: true
-      timeout: 5
-    }
+    # tls {
+    #   cert_file: "/etc/nats/certs/server/tls.crt"
+    #   key_file: "/etc/nats/certs/server/tls.key"
+    #   ca_file: "/etc/nats/certs/ca/ca.crt"
+    #   verify: true
+    #   verify_and_map: true
+    #   timeout: 5
+    # }
     
     # Leafnode Configuration (connecting to broker with mTLS via Linkerd multicluster)
     leafnodes {
@@ -33,15 +33,16 @@ data:
         {
           # Using Linkerd multicluster mirrored service
           # The service will be mirrored as: nats-broker-cluster-a.nats-system.svc.cluster.local
-          url: "tls://nats-broker-cluster-a.nats-system.svc.cluster.local:7422"
+          url: "nats://nats-broker-cluster-a.nats-system.svc.cluster.local:7422"
+          first_info_timeout: 15s
           
           # TLS Configuration for connecting to broker
-          tls {
-            cert_file: "/etc/nats/certs/leaf-client/tls.crt"
-            key_file: "/etc/nats/certs/leaf-client/tls.key"
-            ca_file: "/etc/nats/certs/ca/ca.crt"
-            timeout: 5
-          }
+          # tls {
+          #   cert_file: "/etc/nats/certs/leaf-client/tls.crt"
+          #   key_file: "/etc/nats/certs/leaf-client/tls.key"
+          #   ca_file: "/etc/nats/certs/ca/ca.crt"
+          #   timeout: 5
+          # }
         }
       ]
     }
@@ -59,6 +60,7 @@ spec:
   - name: client
     port: 4222
     targetPort: 4222
+    appProtocol: linkerd.io/opaque
   - name: monitoring
     port: 8222
     targetPort: 8222
@@ -83,7 +85,8 @@ spec:
         app: nats-leaf
       annotations:
         linkerd.io/inject: enabled
-        config.linkerd.io/opaque-ports: "4222,7422"
+        # config.linkerd.io/opaque-ports: "4222"
+        # config.linkerd.io/skip-outbound-ports: "7422"
     spec:
       containers:
       - name: nats
