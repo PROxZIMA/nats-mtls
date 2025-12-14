@@ -4,13 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFEST_DIR="$SCRIPT_DIR/../manifests"
 
-# VM A IP address (NATS Broker)
-BROKER_IP="${BROKER_IP:-1.1.1.1}"
-
 echo "=========================================="
 echo "Deploying NATS Leaf"
 echo "=========================================="
-echo "Connecting to broker at: $BROKER_IP"
+echo "Using Linkerd multicluster mirrored service"
 echo ""
 
 export KUBECONFIG=~/.kube/config
@@ -35,21 +32,9 @@ kubectl apply -f "$MANIFEST_DIR/nats-auth-secret.yaml"
 echo "Creating NATS mTLS certificate secrets..."
 bash "$SCRIPT_DIR/create-nats-secrets.sh"
 
-# Create ConfigMap with broker IP
-echo "Creating NATS leaf configuration..."
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nats-leaf-config
-  namespace: nats-system
-data:
-  BROKER_IP: "$BROKER_IP"
-EOF
-
 # Deploy NATS Leaf
 echo "Deploying NATS Leaf..."
-sed "s/BROKER_IP_PLACEHOLDER/$BROKER_IP/g" "$MANIFEST_DIR/nats-leaf.yaml" | kubectl apply -f -
+kubectl apply -f "$MANIFEST_DIR/nats-leaf.yaml"
 
 # Wait for deployment to be created
 echo "Waiting for deployment to be created..."
@@ -80,4 +65,10 @@ echo "NATS Leaf Deployment Complete!"
 echo "=========================================="
 echo ""
 echo "Leaf endpoint: nats-leaf.nats-system.svc.cluster.local:4222"
-echo "Connected to broker: $BROKER_IP:7422"
+echo "Connected to broker via mirrored service: nats-broker-cluster-a.nats-system.svc.cluster.local:7422"
+echo ""
+echo "Verify mirrored service:"
+echo "  kubectl get svc -n nats-system | grep cluster-a"
+echo ""
+echo "Check leaf connection:"
+echo "  kubectl logs -n nats-system deployment/nats-leaf"
